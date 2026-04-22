@@ -120,22 +120,26 @@ export function VoiceSearch({ onFiltersApplied, shoes }) {
   );
 
   const startListening = useCallback(() => {
+    console.log("[v0] startListening called, isSupported:", isSupported);
     if (!isSupported) return;
 
-    const SpeechRecognition =
-      window.SpeechRecognition || window.webkitSpeechRecognition;
-    const recognition = new SpeechRecognition();
+    try {
+      const SpeechRecognition =
+        window.SpeechRecognition || window.webkitSpeechRecognition;
+      console.log("[v0] SpeechRecognition API found:", !!SpeechRecognition);
+      const recognition = new SpeechRecognition();
 
-    recognition.continuous = false;
-    recognition.interimResults = true;
-    recognition.lang = "en-US";
+      recognition.continuous = false;
+      recognition.interimResults = true;
+      recognition.lang = "en-US";
 
-    recognition.onstart = () => {
-      setIsListening(true);
-      setTranscript("");
-      setResponse("");
-      setError("");
-    };
+      recognition.onstart = () => {
+        console.log("[v0] recognition.onstart fired");
+        setIsListening(true);
+        setTranscript("");
+        setResponse("");
+        setError("");
+      };
 
     recognition.onresult = (event) => {
       console.log("[v0] Speech recognition result received");
@@ -172,7 +176,12 @@ export function VoiceSearch({ onFiltersApplied, shoes }) {
     };
 
     recognitionRef.current = recognition;
-    recognition.start();
+      console.log("[v0] Starting recognition...");
+      recognition.start();
+    } catch (err) {
+      console.error("[v0] Failed to start speech recognition:", err);
+      setError("Failed to start voice search. Please try again.");
+    }
   }, [isSupported, processQuery]);
 
   const stopListening = useCallback(() => {

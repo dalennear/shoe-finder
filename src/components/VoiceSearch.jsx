@@ -1,6 +1,8 @@
 import React, { useState, useCallback, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 
+// Voice search component using Web Speech API
+
 const islandTransition = {
   type: "spring",
   stiffness: 500,

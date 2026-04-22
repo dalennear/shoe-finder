@@ -1,7 +1,5 @@
-import React, { useState, useCallback, useEffect, useRef } from "react";
+import React, { useState, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-
-// Voice search component using Web Speech API
 
 const islandTransition = {
   type: "spring",
@@ -11,23 +9,12 @@ const islandTransition = {
 };
 
 export function VoiceSearch({ onFiltersApplied, shoes }) {
-  const [isListening, setIsListening] = useState(false);
-  const [transcript, setTranscript] = useState("");
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [inputValue, setInputValue] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
   const [response, setResponse] = useState("");
   const [error, setError] = useState("");
-  const [isSupported, setIsSupported] = useState(true);
-  const recognitionRef = useRef(null);
-
-  useEffect(() => {
-    if (
-      typeof window !== "undefined" &&
-      !("webkitSpeechRecognition" in window) &&
-      !("SpeechRecognition" in window)
-    ) {
-      setIsSupported(false);
-    }
-  }, []);
+  const inputRef = useRef(null);
 
   const applyFilters = useCallback(
     (filters) => {
@@ -80,8 +67,11 @@ export function VoiceSearch({ onFiltersApplied, shoes }) {
 
   const processQuery = useCallback(
     async (query) => {
+      if (!query.trim()) return;
+      
       setIsProcessing(true);
       setError("");
+      setResponse("");
 
       try {
         const res = await fetch("/api/voice-search", {
@@ -99,6 +89,7 @@ export function VoiceSearch({ onFiltersApplied, shoes }) {
         if (data.success && data.filters) {
           setResponse(data.filters.response || "Here are your results!");
           applyFilters(data.filters);
+          setInputValue("");
         } else {
           setError("Sorry, I couldn't understand that. Please try again.");
         }
@@ -111,85 +102,24 @@ export function VoiceSearch({ onFiltersApplied, shoes }) {
     [applyFilters]
   );
 
-  const startListening = useCallback(() => {
-    if (!isSupported) {
-      setError("Voice search is not supported in this browser.");
-      return;
-    }
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    processQuery(inputValue);
+  };
 
-    // Clear previous state
-    setTranscript("");
-    setResponse("");
+  const handleExpand = () => {
+    setIsExpanded(true);
     setError("");
+    setResponse("");
+    setTimeout(() => inputRef.current?.focus(), 100);
+  };
 
-    try {
-      const SpeechRecognition =
-        window.SpeechRecognition || window.webkitSpeechRecognition;
-      
-      if (!SpeechRecognition) {
-        setError("Voice search is not supported in this browser.");
-        return;
-      }
-
-      const recognition = new SpeechRecognition();
-
-      recognition.continuous = false;
-      recognition.interimResults = true;
-      recognition.lang = "en-US";
-
-      recognition.onstart = () => {
-        setIsListening(true);
-      };
-
-      recognition.onresult = (event) => {
-        const current = event.resultIndex;
-        const result = event.results[current];
-        const text = result[0].transcript;
-        setTranscript(text);
-
-        if (result.isFinal) {
-          setIsListening(false);
-          processQuery(text);
-        }
-      };
-
-      recognition.onerror = (event) => {
-        setIsListening(false);
-        if (event.error === "no-speech") {
-          setError("No speech detected. Please try again.");
-        } else if (event.error === "not-allowed") {
-          setError("Microphone access denied. Please allow microphone access.");
-        } else if (event.error === "aborted") {
-          // User stopped - not a real error
-          return;
-        } else if (event.error === "network") {
-          setError("Network error. Please check your connection.");
-        } else {
-          setError(`Voice error: ${event.error}. Please try again.`);
-        }
-      };
-
-      recognition.onend = () => {
-        setIsListening(false);
-      };
-
-      recognitionRef.current = recognition;
-      recognition.start();
-    } catch (err) {
-      setIsListening(false);
-      setError(`Failed to start: ${err.message || "Unknown error"}`);
-    }
-  }, [isSupported, processQuery]);
-
-  const stopListening = useCallback(() => {
-    if (recognitionRef.current) {
-      recognitionRef.current.stop();
-    }
-  }, []);
-
-  if (!isSupported) {
-    return null;
-  }
+  const handleClose = () => {
+    setIsExpanded(false);
+    setInputValue("");
+    setError("");
+    setResponse("");
+  };
 
   return (
     <div
@@ -205,72 +135,186 @@ export function VoiceSearch({ onFiltersApplied, shoes }) {
         pointerEvents: "none",
       }}
     >
-      {/* Voice Button */}
-      <motion.button
-        onClick={isListening ? stopListening : startListening}
-        disabled={isProcessing}
-        style={{
-          width: "56px",
-          height: "56px",
-          borderRadius: "50%",
-          border: "none",
-          background: isListening
-            ? "linear-gradient(135deg, #ff6b6b 0%, #ee5a5a 100%)"
-            : "linear-gradient(135deg, rgba(255, 255, 255, 0.9) 0%, rgba(255, 255, 255, 0.7) 100%)",
-          backdropFilter: "blur(40px)",
-          WebkitBackdropFilter: "blur(40px)",
-          boxShadow: isListening
-            ? "0 8px 32px rgba(255, 107, 107, 0.4)"
-            : "0 8px 32px rgba(0, 0, 0, 0.1)",
-          cursor: isProcessing ? "wait" : "pointer",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          pointerEvents: "auto",
-          transition: "all 0.3s ease",
-        }}
-        whileHover={{ scale: 1.05 }}
-        whileTap={{ scale: 0.95 }}
-        aria-label={isListening ? "Stop listening" : "Start voice search"}
-      >
-        {isProcessing ? (
-          <motion.div
-            animate={{ rotate: 360 }}
-            transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+      <AnimatePresence mode="wait">
+        {!isExpanded ? (
+          <motion.button
+            key="search-button"
+            onClick={handleExpand}
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.8 }}
+            style={{
+              width: "56px",
+              height: "56px",
+              borderRadius: "50%",
+              border: "none",
+              background:
+                "linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(255, 255, 255, 0.8) 100%)",
+              backdropFilter: "blur(40px)",
+              WebkitBackdropFilter: "blur(40px)",
+              boxShadow: "0 8px 32px rgba(0, 0, 0, 0.12)",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              pointerEvents: "auto",
+            }}
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            aria-label="Open search"
           >
             <svg
-              width="24"
-              height="24"
+              width="22"
+              height="22"
               viewBox="0 0 24 24"
               fill="none"
-              stroke="#666"
+              stroke="#333"
               strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
             >
-              <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
+              <circle cx="11" cy="11" r="8" />
+              <path d="m21 21-4.3-4.3" />
             </svg>
-          </motion.div>
+          </motion.button>
         ) : (
-          <svg
-            width="24"
-            height="24"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke={isListening ? "#fff" : "#333"}
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
+          <motion.div
+            key="search-expanded"
+            initial={{ opacity: 0, scale: 0.9, width: 56 }}
+            animate={{ opacity: 1, scale: 1, width: 340 }}
+            exit={{ opacity: 0, scale: 0.9, width: 56 }}
+            transition={islandTransition}
+            style={{
+              background:
+                "linear-gradient(135deg, rgba(255, 255, 255, 0.98) 0%, rgba(255, 255, 255, 0.92) 100%)",
+              backdropFilter: "blur(40px)",
+              WebkitBackdropFilter: "blur(40px)",
+              borderRadius: "28px",
+              boxShadow: "0 8px 32px rgba(0, 0, 0, 0.12)",
+              padding: "8px",
+              pointerEvents: "auto",
+            }}
           >
-            <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
-            <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
-            <line x1="12" y1="19" x2="12" y2="23" />
-            <line x1="8" y1="23" x2="16" y2="23" />
-          </svg>
-        )}
-      </motion.button>
+            <form
+              onSubmit={handleSubmit}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
+              }}
+            >
+              <button
+                type="button"
+                onClick={handleClose}
+                style={{
+                  width: "40px",
+                  height: "40px",
+                  borderRadius: "50%",
+                  border: "none",
+                  background: "rgba(0, 0, 0, 0.05)",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  flexShrink: 0,
+                }}
+                aria-label="Close search"
+              >
+                <svg
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="#666"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M18 6 6 18" />
+                  <path d="m6 6 12 12" />
+                </svg>
+              </button>
 
-      {/* Listening/Response Bubble */}
+              <input
+                ref={inputRef}
+                type="text"
+                value={inputValue}
+                onChange={(e) => setInputValue(e.target.value)}
+                placeholder="Blue Jordans under $300..."
+                disabled={isProcessing}
+                style={{
+                  flex: 1,
+                  border: "none",
+                  background: "transparent",
+                  fontSize: "15px",
+                  color: "#000",
+                  outline: "none",
+                  padding: "8px 0",
+                }}
+              />
+
+              <button
+                type="submit"
+                disabled={isProcessing || !inputValue.trim()}
+                style={{
+                  width: "40px",
+                  height: "40px",
+                  borderRadius: "50%",
+                  border: "none",
+                  background:
+                    inputValue.trim() && !isProcessing
+                      ? "#000"
+                      : "rgba(0, 0, 0, 0.1)",
+                  cursor:
+                    inputValue.trim() && !isProcessing ? "pointer" : "default",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  flexShrink: 0,
+                  transition: "background 0.2s ease",
+                }}
+                aria-label="Search"
+              >
+                {isProcessing ? (
+                  <motion.div
+                    animate={{ rotate: 360 }}
+                    transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                  >
+                    <svg
+                      width="18"
+                      height="18"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="#666"
+                      strokeWidth="2"
+                    >
+                      <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
+                    </svg>
+                  </motion.div>
+                ) : (
+                  <svg
+                    width="18"
+                    height="18"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke={inputValue.trim() ? "#fff" : "#999"}
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="m5 12 7-7 7 7" />
+                    <path d="M12 19V5" />
+                  </svg>
+                )}
+              </button>
+            </form>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Response/Error Bubble */}
       <AnimatePresence>
-        {(isListening || transcript || response || error) && (
+        {(response || error) && (
           <motion.div
             initial={{ opacity: 0, y: -10, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -280,63 +324,27 @@ export function VoiceSearch({ onFiltersApplied, shoes }) {
               marginTop: "12px",
               padding: "12px 20px",
               background:
-                "linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(255, 255, 255, 0.85) 100%)",
+                "linear-gradient(135deg, rgba(255, 255, 255, 0.98) 0%, rgba(255, 255, 255, 0.9) 100%)",
               backdropFilter: "blur(40px)",
               WebkitBackdropFilter: "blur(40px)",
-              borderRadius: "20px",
-              border: "1px solid rgba(255, 255, 255, 0.3)",
+              borderRadius: "16px",
               boxShadow: "0 8px 32px rgba(0, 0, 0, 0.1)",
               maxWidth: "320px",
               textAlign: "center",
               pointerEvents: "auto",
             }}
           >
-            {isListening && !transcript && (
-              <motion.div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "8px",
-                  color: "#ff6b6b",
-                  fontSize: "14px",
-                  fontWeight: "500",
-                }}
-              >
-                <motion.span
-                  animate={{ scale: [1, 1.2, 1] }}
-                  transition={{ duration: 1.5, repeat: Infinity }}
-                >
-                  Listening...
-                </motion.span>
-              </motion.div>
-            )}
-
-            {transcript && (
+            {response && !error && (
               <p
                 style={{
                   margin: 0,
-                  fontSize: "14px",
-                  color: "#333",
-                  fontStyle: "italic",
-                }}
-              >
-                &ldquo;{transcript}&rdquo;
-              </p>
-            )}
-
-            {response && !error && (
-              <motion.p
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                style={{
-                  margin: transcript ? "8px 0 0" : 0,
                   fontSize: "14px",
                   color: "#000",
                   fontWeight: "500",
                 }}
               >
                 {response}
-              </motion.p>
+              </p>
             )}
 
             {error && (
@@ -357,7 +365,7 @@ export function VoiceSearch({ onFiltersApplied, shoes }) {
 
       {/* Hint text */}
       <AnimatePresence>
-        {!isListening && !transcript && !response && !error && (
+        {!isExpanded && !response && !error && (
           <motion.p
             initial={{ opacity: 0 }}
             animate={{ opacity: 0.6 }}
@@ -369,7 +377,7 @@ export function VoiceSearch({ onFiltersApplied, shoes }) {
               pointerEvents: "none",
             }}
           >
-            Try: &ldquo;Show me blue Jordans under $300&rdquo;
+            Search with natural language
           </motion.p>
         )}
       </AnimatePresence>

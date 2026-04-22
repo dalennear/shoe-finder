@@ -19,6 +19,7 @@ import { GridCanvas } from "./GridCanvas";
 import { UnifiedControlBar } from "../GridUI";
 import Header from "../Header";
 import { TopologyBackground } from "../TopologyBackground";
+import { VoiceSearch } from "../VoiceSearch";
 import "../HoloCardMaterial"; // Registers <holoCardMaterial /> with R3F
 
 // --- PRELOAD ALL TEXTURES ---
@@ -80,6 +81,10 @@ export default function ShoeGrid() {
     // Filter state for Nike collection
     const [nikeFilter, setNikeFilter] = useState("all"); // 'all' | 'jordan' | 'dunk'
     const [colorFilter, setColorFilter] = useState(EMPTY_COLORS); // [] = all, ['blue','green'] = blue OR green
+    
+    // Voice search state
+    const [voiceFilteredShoes, setVoiceFilteredShoes] = useState(null);
+    const [voiceResponse, setVoiceResponse] = useState("");
 
     // Collections - Nike (all, unfiltered), New Balance, Under $150
     const collectionsData = useMemo(() => {
@@ -121,7 +126,7 @@ export default function ShoeGrid() {
     const [activeCollectionIdx, setActiveCollectionIdx] =
         useState(0);
     const handleCollectionSwitch = (index) => {
-        if (index === activeCollectionIdx) return;
+        if (index === activeCollectionIdx && activeCollectionIdx !== -1) return;
         const now = Date.now();
         setGridLayers((prev) => {
             // 1. Mark existing 'enter' layers as 'exit'
@@ -143,6 +148,9 @@ export default function ShoeGrid() {
         // Clear Nike filters when leaving Nike collection
         setNikeFilter("all");
         setColorFilter(EMPTY_COLORS);
+        // Clear voice search when manually switching collections
+        setVoiceFilteredShoes(null);
+        setVoiceResponse("");
         rigState.target.set(0, 2, 0);
         rigState.activeId = null;
         // 3. Cleanup old layers after transition time
@@ -164,6 +172,55 @@ export default function ShoeGrid() {
     const handleColorFilterChange = (colors) => {
         setColorFilter(colors.length > 0 ? colors : EMPTY_COLORS);
         rigState.activeId = null;
+    };
+
+    // Handle voice search results
+    const handleVoiceFilters = (filteredShoes, response) => {
+        if (filteredShoes.length === 0) {
+            setVoiceResponse("No shoes found matching your criteria. Try a different search!");
+            return;
+        }
+        
+        setVoiceFilteredShoes(filteredShoes);
+        setVoiceResponse(response);
+        
+        // Create a new layer with voice search results
+        const now = Date.now();
+        setGridLayers((prev) => {
+            const exitingLayers = prev.map((layer) =>
+                layer.mode === "enter"
+                    ? { ...layer, mode: "exit", startTime: now }
+                    : layer
+            );
+            const newLayer = {
+                id: `voice-${now}`,
+                items: filteredShoes,
+                mode: "enter",
+                startTime: now,
+            };
+            return [...exitingLayers, newLayer];
+        });
+        
+        // Reset other filters
+        setNikeFilter("all");
+        setColorFilter(EMPTY_COLORS);
+        setActiveCollectionIdx(-1); // -1 indicates voice search mode
+        rigState.target.set(0, 2, 0);
+        rigState.activeId = null;
+        
+        // Cleanup old layers
+        setTimeout(() => {
+            setGridLayers((prev) =>
+                prev.filter((layer) => layer.mode === "enter")
+            );
+        }, CONFIG.cleanupTimeout);
+    };
+    
+    // Clear voice search and return to normal browsing
+    const clearVoiceSearch = () => {
+        setVoiceFilteredShoes(null);
+        setVoiceResponse("");
+        handleCollectionSwitch(0); // Return to Nike collection
     };
 
     useEffect(() => {
@@ -206,6 +263,10 @@ export default function ShoeGrid() {
         >
             <Leva collapsed={true} hidden={false} />
             <Header />
+            <VoiceSearch
+                onFiltersApplied={handleVoiceFilters}
+                shoes={shoes}
+            />
             <Canvas
                 camera={{ position: [0, 0, initialZoom], fov: 45 }}
                 dpr={[1, 2]}

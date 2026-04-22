@@ -112,11 +112,25 @@ export function VoiceSearch({ onFiltersApplied, shoes }) {
   );
 
   const startListening = useCallback(() => {
-    if (!isSupported) return;
+    if (!isSupported) {
+      setError("Voice search is not supported in this browser.");
+      return;
+    }
+
+    // Clear previous state
+    setTranscript("");
+    setResponse("");
+    setError("");
 
     try {
       const SpeechRecognition =
         window.SpeechRecognition || window.webkitSpeechRecognition;
+      
+      if (!SpeechRecognition) {
+        setError("Voice search is not supported in this browser.");
+        return;
+      }
+
       const recognition = new SpeechRecognition();
 
       recognition.continuous = false;
@@ -125,9 +139,6 @@ export function VoiceSearch({ onFiltersApplied, shoes }) {
 
       recognition.onstart = () => {
         setIsListening(true);
-        setTranscript("");
-        setResponse("");
-        setError("");
       };
 
       recognition.onresult = (event) => {
@@ -137,6 +148,7 @@ export function VoiceSearch({ onFiltersApplied, shoes }) {
         setTranscript(text);
 
         if (result.isFinal) {
+          setIsListening(false);
           processQuery(text);
         }
       };
@@ -146,11 +158,14 @@ export function VoiceSearch({ onFiltersApplied, shoes }) {
         if (event.error === "no-speech") {
           setError("No speech detected. Please try again.");
         } else if (event.error === "not-allowed") {
-          setError("Microphone access denied. Please enable it in your browser.");
+          setError("Microphone access denied. Please allow microphone access.");
         } else if (event.error === "aborted") {
+          // User stopped - not a real error
           return;
+        } else if (event.error === "network") {
+          setError("Network error. Please check your connection.");
         } else {
-          setError("An error occurred. Please try again.");
+          setError(`Voice error: ${event.error}. Please try again.`);
         }
       };
 
@@ -161,7 +176,8 @@ export function VoiceSearch({ onFiltersApplied, shoes }) {
       recognitionRef.current = recognition;
       recognition.start();
     } catch (err) {
-      setError("Failed to start voice search. Please try again.");
+      setIsListening(false);
+      setError(`Failed to start: ${err.message || "Unknown error"}`);
     }
   }, [isSupported, processQuery]);
 

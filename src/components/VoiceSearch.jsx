@@ -84,25 +84,34 @@ export function VoiceSearch({ onFiltersApplied, shoes }) {
       setError("");
 
       try {
+        console.log("[v0] Sending query to API:", query);
         const res = await fetch("/api/voice-search", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ query }),
         });
 
+        console.log("[v0] API response status:", res.status);
+        
         if (!res.ok) {
+          const errorText = await res.text();
+          console.log("[v0] API error response:", errorText);
           throw new Error("Failed to process query");
         }
 
         const data = await res.json();
+        console.log("[v0] API response data:", data);
 
         if (data.success && data.filters) {
           setResponse(data.filters.response || "Here are your results!");
           applyFilters(data.filters);
+        } else {
+          console.log("[v0] Unexpected API response format:", data);
+          setError("Sorry, I couldn't understand that. Please try again.");
         }
       } catch (err) {
         setError("Sorry, I couldn't process that. Please try again.");
-        console.error("Voice search error:", err);
+        console.error("[v0] Voice search error:", err);
       } finally {
         setIsProcessing(false);
       }
@@ -129,22 +138,30 @@ export function VoiceSearch({ onFiltersApplied, shoes }) {
     };
 
     recognition.onresult = (event) => {
+      console.log("[v0] Speech recognition result received");
       const current = event.resultIndex;
       const result = event.results[current];
       const text = result[0].transcript;
+      console.log("[v0] Transcript:", text, "isFinal:", result.isFinal);
       setTranscript(text);
 
       if (result.isFinal) {
+        console.log("[v0] Final result, processing query");
         processQuery(text);
       }
     };
 
     recognition.onerror = (event) => {
+      console.log("[v0] Speech recognition error:", event.error);
       setIsListening(false);
       if (event.error === "no-speech") {
         setError("No speech detected. Please try again.");
       } else if (event.error === "not-allowed") {
         setError("Microphone access denied. Please enable it in your browser.");
+      } else if (event.error === "aborted") {
+        // User stopped or recognition was aborted - not a real error
+        console.log("[v0] Recognition aborted, ignoring");
+        return;
       } else {
         setError("An error occurred. Please try again.");
       }

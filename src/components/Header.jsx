@@ -47,12 +47,12 @@ export default function Header() {
                   "'Helvetica Neue', Helvetica, Arial, sans-serif",
                 fontSize: "15px",
                 fontWeight: "700",
-                letterSpacing: "0.12em",
+                letterSpacing: "0.08em",
                 color: "#000",
                 textTransform: "uppercase",
               }}
             >
-              PERFECT
+              Best Walking Shoes
             </span>
             <span
               style={{
@@ -60,12 +60,12 @@ export default function Header() {
                   "'Helvetica Neue', Helvetica, Arial, sans-serif",
                 fontSize: "15px",
                 fontWeight: "300",
-                letterSpacing: "0.12em",
+                letterSpacing: "0.08em",
                 color: "#000",
                 textTransform: "uppercase",
               }}
             >
-              PAIR
+              for Men
             </span>
           </div>
           <span

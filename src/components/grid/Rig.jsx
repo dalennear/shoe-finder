@@ -115,15 +115,27 @@ export function Rig({ gridW, gridH }) {
                 : Math.max(-by, Math.min(by, rigState.target.y));
             rigState.target.set(snapX, snapY, 0);
         };
+        // Mouse wheel zoom
+        const onWheel = (e) => {
+            e.preventDefault();
+            const zoomSpeed = 0.8;
+            const delta = e.deltaY > 0 ? zoomSpeed : -zoomSpeed;
+            const newZoom = rigState.zoom + delta;
+            // Clamp between zoomIn and zoomOut limits
+            rigState.zoom = Math.max(CONFIG.zoomIn, Math.min(CONFIG.zoomOut, newZoom));
+        };
+
         canvas.addEventListener("pointerdown", onDown);
         window.addEventListener("pointermove", onMove);
         window.addEventListener("pointerup", onUp);
         window.addEventListener("pointercancel", onUp); // Handle interrupted touch
+        canvas.addEventListener("wheel", onWheel, { passive: false });
         return () => {
             canvas.removeEventListener("pointerdown", onDown);
             window.removeEventListener("pointermove", onMove);
             window.removeEventListener("pointerup", onUp);
             window.removeEventListener("pointercancel", onUp);
+            canvas.removeEventListener("wheel", onWheel);
         };
     }, [gl, camera, gridW, gridH]);
 
